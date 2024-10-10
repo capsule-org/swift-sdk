@@ -29,7 +29,7 @@ public enum CapsuleEnvironment: Hashable {
     var jsBridgeUrl: URL {
         switch self {
         case .dev(_, let jsBridgeUrl):
-            return jsBridgeUrl ?? URL(string: "http://localhost:3004")!
+            return jsBridgeUrl ?? URL(string: "http://localhost:5173")!
         case .sandbox(let jsBridgeUrl):
             return jsBridgeUrl ?? URL(string: "https://js-bridge.sandbox.usecapsule.com/")!
         case .beta(let jsBridgeUrl):

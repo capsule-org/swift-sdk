@@ -76,8 +76,9 @@ struct UserAuthView: View {
                     HStack {
                         Button("Sign Up") {
                             Task.init {
+                                print("checking if user exists...")
                                 let userExists = try await capsuleManager.checkIfUserExists(email: email)
-                                
+                                print(userExists)
                                 if userExists {
                                     return
                                 }
@@ -102,7 +103,7 @@ struct UserAuthView: View {
                     case .verifyEmail:
                         VerifyEmailView(email: email, path: $path)
                     case .wallet:
-                        WalletView(wallet: capsuleManager.wallet, path: $path)
+                        WalletView(wallet: capsuleManager.wallets.first, path: $path)
                     }
                 }
             }

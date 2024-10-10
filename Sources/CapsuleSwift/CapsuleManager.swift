@@ -29,7 +29,7 @@ extension CapsuleError: CustomStringConvertible {
 @available(iOS 16.4, *)
 public class CapsuleManager: NSObject, ObservableObject {
     // MARK: - Public
-    @MainActor @Published public var wallet: Wallet?
+    @MainActor @Published public var wallets: [Wallet] = []
     @MainActor @Published public var sessionState: CapsuleSessionState = .unknown
     
     public static let packageVersion = "0.0.3"
@@ -74,16 +74,13 @@ public class CapsuleManager: NSObject, ObservableObject {
             }
           });
         """
-            
+        
         webView.evaluateJavaScript(script)
-        isCapsuleInitialized = true
     }
     
     @MainActor
     @discardableResult
     private func postMessage(method: String, arguments: [Encodable]) async throws -> Any? {
-        guard isCapsuleInitialized else { return nil }
-
         return try await withCheckedThrowingContinuation { continuation in
             messageQueue.append((method, arguments, continuation))
             processNextMessageIfNeeded()
@@ -137,7 +134,6 @@ extension CapsuleManager: WKNavigationDelegate {
                 sessionState = .active
                 return
             }
-            wallet = try await fetchWallets().first
             sessionState = .activeLoggedIn
         }
     }
@@ -149,7 +145,7 @@ extension CapsuleManager: WKNavigationDelegate {
 extension CapsuleManager: WKScriptMessageHandler {
     public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let resp = message.body as? [String: Any],
-              let method = resp["method"] else {
+              let method = resp["method"] as? String else {
             completeCurrentMessage(with: .failure(CapsuleError.bridgeError("Invalid response format")))
             return
         }
@@ -159,6 +155,9 @@ extension CapsuleManager: WKScriptMessageHandler {
         } else if resp["error"] != nil {
             completeCurrentMessage(with: .failure(CapsuleError.bridgeError("\(method): Error occurred, but details are not available")))
         } else {
+            if (method == "Capsule#init") {
+                isCapsuleInitialized = true
+            }
             completeCurrentMessage(with: .success(resp["responseData"]))
         }
     }
@@ -193,10 +192,8 @@ extension CapsuleManager {
         let verifyWebChallengeResult = try await postMessage(method: "verifyWebChallenge", arguments: [id, authenticatorData, clientDataJSON, signature])
         let userId = try decodeResult(verifyWebChallengeResult, expectedType: String.self, method: "verifyWebChallenge")
         
-        let wallet = try await postMessage(method: "loginV2", arguments: [userId, id, signIntoPasskeyAccountResult.userID.base64URLEncodedString()])
-        let walletDict = try decodeResult(wallet, expectedType: [String: Any].self, method: "loginV2")
-        
-        self.wallet = Wallet(result: walletDict)
+        let _ = try await postMessage(method: "loginV2", arguments: [userId, id, signIntoPasskeyAccountResult.userID.base64URLEncodedString()])
+        self.wallets = try await fetchWallets()
         sessionState = .activeLoggedIn
     }
     
@@ -272,7 +269,7 @@ extension CapsuleManager {
         let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
         let dateFrom = Date(timeIntervalSince1970: 0)
         await dataStore.removeData(ofTypes: dataTypes, modifiedSince: dateFrom)
-        wallet = nil
+        wallets = []
         self.sessionState = .inactive
     }
 }
@@ -283,13 +280,8 @@ extension CapsuleManager {
 extension CapsuleManager {
     @MainActor
     public func createWallet(skipDistributable: Bool) async throws {
-        let result = try await postMessage(method: "createWallet", arguments: ["EVM", skipDistributable])
-        let walletArray = try decodeResult(result, expectedType: [[String: Any]].self, method: "createWallet")
-        guard let walletAndRecovery = walletArray.first else {
-            throw CapsuleError.bridgeError("Empty wallet array returned")
-        }
-        let walletDict = try decodeDictionaryResult(walletAndRecovery, expectedType: [String: String].self, method: "createWallet", key: "wallet")
-        self.wallet = Wallet(result: walletDict)
+        let _ = try await postMessage(method: "createWallet", arguments: ["EVM", skipDistributable])
+        self.wallets = try await fetchWallets()
         self.sessionState = .activeLoggedIn
     }
     

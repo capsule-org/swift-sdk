@@ -9,8 +9,8 @@ import SwiftUI
 import CapsuleSwift
 @main
 struct exampleApp: App {
-    @StateObject var capsuleManager = CapsuleManager(environment: defaultDevEnv, apiKey: "4f1d69a07c0fdc0bd16472a0780b770c")
-
+    @StateObject var capsuleManager = CapsuleManager(environment: defaultSandboxEnv, apiKey: "8ee2d015fbc6062a6e30bdc472f2946c")
+    
     var body: some Scene {
         WindowGroup {
             UserAuthView()
